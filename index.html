@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris z Bombami</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        #gameContainer {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        
+        canvas {
+            border: 2px solid #16213e;
+            background: #0f0f1e;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        #info {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            min-width: 200px;
+        }
+        
+        #info h2 {
+            margin-top: 0;
+            color: #f39c12;
+        }
+        
+        #score, #level, #lines {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        
+        #controls {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        
+        #controls h3 {
+            color: #f39c12;
+            margin-bottom: 10px;
+        }
+        
+        #controls div {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        
+        .explosion {
+            position: absolute;
+            pointer-events: none;
+        }
+        
+        @keyframes explode {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(3);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="info">
+            <h2>Tetris z Bombami</h2>
+            <div id="score">Punkty: 0</div>
+            <div id="level">Poziom: 1</div>
+            <div id="lines">Linie: 0</div>
+            
+            <div id="controls">
+                <h3>Sterowanie:</h3>
+                <div>← → - Ruch w lewo/prawo</div>
+                <div>↓ - Przyspieszenie</div>
+                <div>↑ - Obrót</div>
+                <div>Spacja - Upuść</div>
+                <div>P - Pauza</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="tetris.js"></script>
+</body>
+</html>
