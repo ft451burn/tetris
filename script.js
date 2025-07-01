@@ -12,7 +12,8 @@ const COLORS = [
     '#F538FF', // S
     '#FF8E0D', // Z
     '#FFE138', // J
-    '#3877FF'  // L
+    '#3877FF', // L
+    '#FF4444'  // Bomba
 ];
 
 // Kształty klocków Tetris
@@ -52,6 +53,9 @@ const TETROMINOS = [
         [0,0,7],
         [7,7,7],
         [0,0,0]
+    ],
+    [ // Bomba
+        [8]
     ]
 ];
 
@@ -67,6 +71,8 @@ let score = 0;
 let level = 1;
 let lines = 0;
 let isPaused = false;
+let explosions = []; // Tablica aktywnych wybuchów
+let bombChance = 0.1; // 10% szansy na bombę
 
 // Inicjalizacja gry
 function init() {
@@ -122,12 +128,14 @@ function restartGame() {
 
 // Tworzenie nowego klocka
 function createPiece() {
-    const type = Math.floor(Math.random() * 7) + 1;
+    const isBomb = Math.random() < bombChance;
+    const type = isBomb ? 8 : Math.floor(Math.random() * 7) + 1;
     return {
         type: type,
         x: Math.floor(BOARD_WIDTH / 2) - Math.floor(TETROMINOS[type][0].length / 2),
         y: 0,
-        rotation: 0
+        rotation: 0,
+        isBomb: isBomb
     };
 }
 
@@ -153,6 +161,8 @@ function gameLoop(currentTime = 0) {
 
 // Aktualizacja logiki gry
 function update() {
+    updateExplosions();
+    
     if (!movePiece(0, 1)) {
         placePiece();
         clearLines();
@@ -180,9 +190,12 @@ function draw() {
     }
     
     // Rysuj cień klocka
-    if (currentPiece) {
+    if (currentPiece && !currentPiece.isBomb) {
         drawGhost();
     }
+    
+    // Rysuj wybuchy
+    drawExplosions();
     
     // Rysuj następny klocek
     drawNextPiece();
@@ -244,13 +257,43 @@ function drawBlock(x, y, type) {
     const pixelX = x * BLOCK_SIZE;
     const pixelY = y * BLOCK_SIZE;
     
-    ctx.fillStyle = COLORS[type];
-    ctx.fillRect(pixelX, pixelY, BLOCK_SIZE, BLOCK_SIZE);
-    
-    // Dodaj obramowanie
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(pixelX, pixelY, BLOCK_SIZE, BLOCK_SIZE);
+    if (type === 8) { // Bomba
+        // Rysuj bombę jako czarną kulę z lontem
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(pixelX + BLOCK_SIZE/2, pixelY + BLOCK_SIZE/2, BLOCK_SIZE/2 - 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Lont
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(pixelX + BLOCK_SIZE/2, pixelY + 2);
+        ctx.lineTo(pixelX + BLOCK_SIZE/2 - 5, pixelY - 5);
+        ctx.stroke();
+        
+        // Iskra na loncie
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(pixelX + BLOCK_SIZE/2 - 5, pixelY - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Obramowanie
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(pixelX + BLOCK_SIZE/2, pixelY + BLOCK_SIZE/2, BLOCK_SIZE/2 - 2, 0, Math.PI * 2);
+        ctx.stroke();
+    } else {
+        // Normalny blok
+        ctx.fillStyle = COLORS[type];
+        ctx.fillRect(pixelX, pixelY, BLOCK_SIZE, BLOCK_SIZE);
+        
+        // Dodaj obramowanie
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(pixelX, pixelY, BLOCK_SIZE, BLOCK_SIZE);
+    }
 }
 
 // Rysowanie następnego klocka
@@ -289,7 +332,7 @@ function drawNextPiece() {
 
 // Poruszanie klockiem
 function movePiece(dx, dy) {
-    if (isValidMove(currentPiece, dx, dy, 0)) {
+    if (isValidMove(currentPiece, dx, dy, currentPiece.rotation)) {
         currentPiece.x += dx;
         currentPiece.y += dy;
         return true;
@@ -318,9 +361,14 @@ function isValidMove(piece, dx, dy, rotation) {
                 const boardX = newX + x;
                 const boardY = newY + y;
                 
-                if (boardX < 0 || boardX >= BOARD_WIDTH || 
-                    boardY >= BOARD_HEIGHT || 
-                    (boardY >= 0 && board[boardY][boardX] !== 0)) {
+                // Poprawiona logika sprawdzania granic
+                if (boardX < 0 || boardX >= BOARD_WIDTH) {
+                    return false;
+                }
+                if (boardY >= BOARD_HEIGHT) {
+                    return false;
+                }
+                if (boardY >= 0 && board[boardY][boardX] !== 0) {
                     return false;
                 }
             }
@@ -365,10 +413,103 @@ function placePiece() {
                 const boardX = currentPiece.x + x;
                 if (boardY >= 0) {
                     board[boardY][boardX] = currentPiece.type;
+                    
+                    // Jeśli to bomba, wywołaj wybuch
+                    if (currentPiece.isBomb) {
+                        explodeBomb(boardX, boardY);
+                    }
                 }
             }
         }
     }
+}
+
+// Funkcja wybuchu bomby
+function explodeBomb(centerX, centerY) {
+    const explosionRadius = 2;
+    const explosion = {
+        x: centerX,
+        y: centerY,
+        radius: explosionRadius,
+        timer: 30, // Czas trwania animacji wybuchu
+        maxTimer: 30
+    };
+    
+    explosions.push(explosion);
+    
+    // Usuń bloki w promieniu wybuchu
+    for (let y = Math.max(0, centerY - explosionRadius); 
+         y <= Math.min(BOARD_HEIGHT - 1, centerY + explosionRadius); y++) {
+        for (let x = Math.max(0, centerX - explosionRadius); 
+             x <= Math.min(BOARD_WIDTH - 1, centerX + explosionRadius); x++) {
+            const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+            if (distance <= explosionRadius) {
+                board[y][x] = 0;
+            }
+        }
+    }
+    
+    // Dodaj punkty za wybuch
+    score += 50;
+    updateScore();
+}
+
+// Aktualizacja wybuchów
+function updateExplosions() {
+    explosions = explosions.filter(explosion => {
+        explosion.timer--;
+        return explosion.timer > 0;
+    });
+}
+
+// Rysowanie wybuchów
+function drawExplosions() {
+    explosions.forEach(explosion => {
+        const progress = 1 - (explosion.timer / explosion.maxTimer);
+        const currentRadius = explosion.radius * progress;
+        
+        // Rysuj okrąg wybuchu
+        ctx.save();
+        ctx.globalAlpha = 0.7 * (explosion.timer / explosion.maxTimer);
+        
+        // Gradient wybuchu
+        const gradient = ctx.createRadialGradient(
+            (explosion.x + 0.5) * BLOCK_SIZE, 
+            (explosion.y + 0.5) * BLOCK_SIZE, 
+            0,
+            (explosion.x + 0.5) * BLOCK_SIZE, 
+            (explosion.y + 0.5) * BLOCK_SIZE, 
+            currentRadius * BLOCK_SIZE
+        );
+        gradient.addColorStop(0, '#FFD700');
+        gradient.addColorStop(0.5, '#FF6B00');
+        gradient.addColorStop(1, '#FF0000');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(
+            (explosion.x + 0.5) * BLOCK_SIZE,
+            (explosion.y + 0.5) * BLOCK_SIZE,
+            currentRadius * BLOCK_SIZE,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+        
+        // Dodaj iskry
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const sparkX = (explosion.x + 0.5) * BLOCK_SIZE + Math.cos(angle) * currentRadius * BLOCK_SIZE;
+            const sparkY = (explosion.y + 0.5) * BLOCK_SIZE + Math.sin(angle) * currentRadius * BLOCK_SIZE;
+            
+            ctx.fillStyle = '#FFFF00';
+            ctx.beginPath();
+            ctx.arc(sparkX, sparkY, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    });
 }
 
 // Usuwanie pełnych linii
@@ -458,7 +599,9 @@ function handleKeyPress(event) {
             break;
         case 'ArrowUp':
             event.preventDefault();
-            rotatePiece();
+            if (!currentPiece.isBomb) { // Bomby nie można obracać
+                rotatePiece();
+            }
             break;
         case 'Space':
             event.preventDefault();

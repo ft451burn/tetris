@@ -95,6 +95,13 @@ body {
     opacity: 0.9;
 }
 
+.controls h4 {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    color: #ff6b6b;
+    font-size: 1rem;
+}
+
 .game-board {
     position: relative;
 }
