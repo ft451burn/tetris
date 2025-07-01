@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris</title>
+    <style>
+        body {
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game-container {
+            background-color: #222;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        #game {
+            border: 2px solid #444;
+            background-color: #000;
+        }
+        
+        #score {
+            color: white;
+            font-size: 20px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        #controls {
+            color: white;
+            font-size: 14px;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Punkty: 0</div>
+        <canvas id="game" width="300" height="600"></canvas>
+        <div id="controls">
+            ← → - Ruch | ↓ - Przyspieszenie | ↑ - Obrót | Spacja - Upuść
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        // Rozmiary
+        const COLS = 10;
+        const ROWS = 20;
+        const BLOCK_SIZE = 30;
+        
+        // Kolory tetromino
+        const COLORS = {
+            'I': '#00f0f0',
+            'O': '#f0f000',
+            'T': '#a000f0',
+            'S': '#00f000',
+            'Z': '#f00000',
+            'J': '#0000f0',
+            'L': '#f0a000'
+        };
+        
+        // Definicje tetromino - poprawione rotacje dla L
+        const TETROMINOS = {
+            'I': {
+                shapes: [
+                    [[1,1,1,1]],
+                    [[1],[1],[1],[1]]
+                ]
+            },
+            'O': {
+                shapes: [
+                    [[1,1],[1,1]]
+                ]
+            },
+            'T': {
+                shapes: [
+                    [[0,1,0],[1,1,1]],
+                    [[1,0],[1,1],[1,0]],
+                    [[1,1,1],[0,1,0]],
+                    [[0,1],[1,1],[0,1]]
+                ]
+            },
+            'S': {
+                shapes: [
+                    [[0,1,1],[1,1,0]],
+                    [[1,0],[1,1],[0,1]]
+                ]
+            },
+            'Z': {
+                shapes: [
+                    [[1,1,0],[0,1,1]],
+                    [[0,1],[1,1],[1,0]]
+                ]
+            },
+            'J': {
+                shapes: [
+                    [[1,0,0],[1,1,1]],
+                    [[1,1],[1,0],[1,0]],
+                    [[1,1,1],[0,0,1]],
+                    [[0,1],[0,1],[1,1]]
+                ]
+            },
+            'L': {
+                shapes: [
+                    [[0,0,1],[1,1,1]],
+                    [[1,0],[1,0],[1,1]],
+                    [[1,1,1],[1,0,0]],
+                    [[1,1],[0,1],[0,1]]
+                ]
+            }
+        };
+        
+        class Game {
+            constructor() {
+                this.board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+                this.currentPiece = null;
+                this.score = 0;
+                this.gameOver = false;
+                this.dropCounter = 0;
+                this.dropInterval = 1000;
+                this.lastTime = 0;
+            }
+            
+            start() {
+                this.spawnPiece();
+                this.update();
+            }
+            
+            spawnPiece() {
+                const pieces = Object.keys(TETROMINOS);
+                const type = pieces[Math.floor(Math.random() * pieces.length)];
+                this.currentPiece = {
+                    type: type,
+                    rotation: 0,
+                    x: Math.floor(COLS / 2) - Math.floor(TETROMINOS[type].shapes[0][0].length / 2),
+                    y: 0
+                };
+                
+                if (this.checkCollision()) {
+                    this.gameOver = true;
+                }
+            }
+            
+            rotate() {
+                if (!this.currentPiece) return;
+                
+                const piece = this.currentPiece;
+                const shapes = TETROMINOS[piece.type].shapes;
+                const originalRotation = piece.rotation;
+                piece.rotation = (piece.rotation + 1) % shapes.length;
+                
+                // Sprawdź czy rotacja jest możliwa
+                if (this.checkCollision()) {
+                    // Spróbuj wall kick
+                    const kicks = [
+                        {x: -1, y: 0},
+                        {x: 1, y: 0},
+                        {x: 0, y: -1},
+                        {x: -2, y: 0},
+                        {x: 2, y: 0}
+                    ];
+                    
+                    let kicked = false;
+                    for (const kick of kicks) {
+                        piece.x += kick.x;
+                        piece.y += kick.y;
+                        if (!this.checkCollision()) {
+                            kicked = true;
+                            break;
+                        }
+                        piece.x -= kick.x;
+                        piece.y -= kick.y;
+                    }
+                    
+                    if (!kicked) {
+                        piece.rotation = originalRotation;
+                    }
+                }
+            }
+            
+            move(dir) {
+                if (!this.currentPiece) return;
+                
+                this.currentPiece.x += dir;
+                if (this.checkCollision()) {
+                    this.currentPiece.x -= dir;
+                }
+            }
+            
+            drop() {
+                if (!this.currentPiece) return;
+                
+                this.currentPiece.y++;
+                this.dropCounter = 0;
+                
+                if (this.checkCollision()) {
+                    this.currentPiece.y--;
+                    this.lock();
+                }
+            }
+            
+            hardDrop() {
+                if (!this.currentPiece) return;
+                
+                while (!this.checkCollision()) {
+                    this.currentPiece.y++;
+                }
+                this.currentPiece.y--;
+                this.lock();
+            }
+            
+            checkCollision() {
+                if (!this.currentPiece) return false;
+                
+                const shape = TETROMINOS[this.currentPiece.type].shapes[this.currentPiece.rotation];
+                
+                for (let y = 0; y < shape.length; y++) {
+                    for (let x = 0; x < shape[y].length; x++) {
+                        if (shape[y][x]) {
+                            const newX = this.currentPiece.x + x;
+                            const newY = this.currentPiece.y + y;
+                            
+                            if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                                return true;
+                            }
+                            
+                            if (newY >= 0 && this.board[newY][newX]) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
+            lock() {
+                const shape = TETROMINOS[this.currentPiece.type].shapes[this.currentPiece.rotation];
+                const color = this.currentPiece.type;
+                
+                for (let y = 0; y < shape.length; y++) {
+                    for (let x = 0; x < shape[y].length; x++) {
+                        if (shape[y][x]) {
+                            const boardY = this.currentPiece.y + y;
+                            const boardX = this.currentPiece.x + x;
+                            if (boardY >= 0) {
+                                this.board[boardY][boardX] = color;
+                            }
+                        }
+                    }
+                }
+                
+                this.clearLines();
+                this.spawnPiece();
+            }
+            
+            clearLines() {
+                let linesCleared = 0;
+                
+                for (let y = ROWS - 1; y >= 0; y--) {
+                    if (this.board[y].every(cell => cell !== 0)) {
+                        this.board.splice(y, 1);
+                        this.board.unshift(Array(COLS).fill(0));
+                        linesCleared++;
+                        y++;
+                    }
+                }
+                
+                if (linesCleared > 0) {
+                    this.score += linesCleared * 100;
+                    document.getElementById('score').textContent = `Punkty: ${this.score}`;
+                }
+            }
+            
+            draw() {
+                // Wyczyść canvas
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Rysuj planszę
+                for (let y = 0; y < ROWS; y++) {
+                    for (let x = 0; x < COLS; x++) {
+                        if (this.board[y][x]) {
+                            ctx.fillStyle = COLORS[this.board[y][x]];
+                            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                        }
+                    }
+                }
+                
+                // Rysuj aktualny klocek
+                if (this.currentPiece) {
+                    const shape = TETROMINOS[this.currentPiece.type].shapes[this.currentPiece.rotation];
+                    ctx.fillStyle = COLORS[this.currentPiece.type];
+                    
+                    for (let y = 0; y < shape.length; y++) {
+                        for (let x = 0; x < shape[y].length; x++) {
+                            if (shape[y][x]) {
+                                ctx.fillRect(
+                                    (this.currentPiece.x + x) * BLOCK_SIZE,
+                                    (this.currentPiece.y + y) * BLOCK_SIZE,
+                                    BLOCK_SIZE - 1,
+                                    BLOCK_SIZE - 1
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                // Rysuj siatkę
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = 0.5;
+                for (let x = 0; x <= COLS; x++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x * BLOCK_SIZE, 0);
+                    ctx.lineTo(x * BLOCK_SIZE, ROWS * BLOCK_SIZE);
+                    ctx.stroke();
+                }
+                for (let y = 0; y <= ROWS; y++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y * BLOCK_SIZE);
+                    ctx.lineTo(COLS * BLOCK_SIZE, y * BLOCK_SIZE);
+                    ctx.stroke();
+                }
+            }
+            
+            update(time = 0) {
+                if (this.gameOver) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '30px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                    return;
+                }
+                
+                const deltaTime = time - this.lastTime;
+                this.lastTime = time;
+                
+                this.dropCounter += deltaTime;
+                if (this.dropCounter > this.dropInterval) {
+                    this.drop();
+                }
+                
+                this.draw();
+                requestAnimationFrame(time => this.update(time));
+            }
+        }
+        
+        // Kontrola
+        const game = new Game();
+        
+        document.addEventListener('keydown', e => {
+            if (game.gameOver) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    game.move(-1);
+                    break;
+                case 'ArrowRight':
+                    game.move(1);
+                    break;
+                case 'ArrowDown':
+                    game.drop();
+                    break;
+                case 'ArrowUp':
+                    game.rotate();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    game.hardDrop();
+                    break;
+            }
+        });
+        
+        // Start gry
+        game.start();
+    </script>
+</body>
+</html>
