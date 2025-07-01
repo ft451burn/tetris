@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        canvas {
+            border: 3px solid #fff;
+            border-radius: 10px;
+            background: #000;
+            display: block;
+        }
+
+        .controls {
+            margin-top: 15px;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+        }
+
+        .score {
+            color: white;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score">Wynik: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="300" height="600"></canvas>
+        <div class="controls">
+            Strzałki: ruch | Spacja: obrót | S: szybki spadek
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+
+        // Stałe gry
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const BLOCK_SIZE = 30;
+        
+        // Plansza gry
+        let board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+        
+        // Kolory klocków
+        const COLORS = [
+            '#000000', // 0 - pusty
+            '#FF0D72', // 1 - I
+            '#0DC2FF', // 2 - O  
+            '#0DFF72', // 3 - T
+            '#F538FF', // 4 - S
+            '#FF8E0D', // 5 - Z
+            '#FFE138', // 6 - J
+            '#3877FF'  // 7 - L
+        ];
+
+        // Kształty klocków (tetromino)
+        const PIECES = [
+            [], // 0 - pusty
+            [ // 1 - I
+                [1,1,1,1]
+            ],
+            [ // 2 - O
+                [2,2],
+                [2,2]
+            ],
+            [ // 3 - T
+                [0,3,0],
+                [3,3,3]
+            ],
+            [ // 4 - S
+                [0,4,4],
+                [4,4,0]  
+            ],
+            [ // 5 - Z
+                [5,5,0],
+                [0,5,5]
+            ],
+            [ // 6 - J
+                [6,0,0],
+                [6,6,6]
+            ],
+            [ // 7 - L
+                [0,0,7],
+                [7,7,7]
+            ]
+        ];
+
+        // Aktualny klocek
+        let currentPiece = {
+            type: 0,
+            shape: [],
+            x: 0,
+            y: 0
+        };
+
+        let score = 0;
+        let gameRunning = true;
+        let dropTime = 0;
+        let dropInterval = 1000; // ms
+
+        // Inicjalizacja gry
+        function init() {
+            spawnPiece();
+            gameLoop();
+        }
+
+        // Losowanie nowego klocka
+        function spawnPiece() {
+            const pieceType = Math.floor(Math.random() * 7) + 1;
+            currentPiece = {
+                type: pieceType,
+                shape: PIECES[pieceType],
+                x: Math.floor(BOARD_WIDTH / 2) - Math.floor(PIECES[pieceType][0].length / 2),
+                y: 0
+            };
+
+            // Sprawdź czy gra się skończyła
+            if (isCollision(currentPiece.shape, currentPiece.x, currentPiece.y)) {
+                gameRunning = false;
+                alert('Koniec gry! Wynik: ' + score);
+            }
+        }
+
+        // Sprawdzanie kolizji z poprawionymi granicami
+        function isCollision(shape, x, y) {
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col] !== 0) {
+                        const newX = x + col;
+                        const newY = y + row;
+                        
+                        // Sprawdź granice planszy
+                        if (newX < 0 || newX >= BOARD_WIDTH || newY >= BOARD_HEIGHT) {
+                            return true;
+                        }
+                        
+                        // Sprawdź kolizję z istniejącymi klockami (tylko jeśli y >= 0)
+                        if (newY >= 0 && board[newY][newX] !== 0) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Ruch klocka w lewo
+        function moveLeft() {
+            if (!isCollision(currentPiece.shape, currentPiece.x - 1, currentPiece.y)) {
+                currentPiece.x--;
+            }
+        }
+
+        // Ruch klocka w prawo
+        function moveRight() {
+            if (!isCollision(currentPiece.shape, currentPiece.x + 1, currentPiece.y)) {
+                currentPiece.x++;
+            }
+        }
+
+        // Ruch klocka w dół
+        function moveDown() {
+            if (!isCollision(currentPiece.shape, currentPiece.x, currentPiece.y + 1)) {
+                currentPiece.y++;
+                return true;
+            } else {
+                // Klocek dotarł na dół - umieść go na planszy
+                placePiece();
+                clearLines();
+                spawnPiece();
+                return false;
+            }
+        }
+
+        // Obrót klocka
+        function rotatePiece() {
+            const rotated = rotateMatrix(currentPiece.shape);
+            
+            // Sprawdź czy obrót jest możliwy
+            if (!isCollision(rotated, currentPiece.x, currentPiece.y)) {
+                currentPiece.shape = rotated;
+            } else {
+                // Spróbuj przesunąć klocek jeśli obrót powoduje kolizję
+                for (let offset = 1; offset <= 2; offset++) {
+                    // Spróbuj w lewo
+                    if (!isCollision(rotated, currentPiece.x - offset, currentPiece.y)) {
+                        currentPiece.shape = rotated;
+                        currentPiece.x -= offset;
+                        return;
+                    }
+                    // Spróbuj w prawo
+                    if (!isCollision(rotated, currentPiece.x + offset, currentPiece.y)) {
+                        currentPiece.shape = rotated;
+                        currentPiece.x += offset;
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Obrót macierzy o 90 stopni
+        function rotateMatrix(matrix) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            const rotated = Array(cols).fill().map(() => Array(rows).fill(0));
+            
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    rotated[col][rows - 1 - row] = matrix[row][col];
+                }
+            }
+            
+            return rotated;
+        }
+
+        // Umieszczenie klocka na planszy
+        function placePiece() {
+            for (let row = 0; row < currentPiece.shape.length; row++) {
+                for (let col = 0; col < currentPiece.shape[row].length; col++) {
+                    if (currentPiece.shape[row][col] !== 0) {
+                        const x = currentPiece.x + col;
+                        const y = currentPiece.y + row;
+                        if (y >= 0) {
+                            board[y][x] = currentPiece.type;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Usuwanie pełnych linii
+        function clearLines() {
+            let linesCleared = 0;
+            
+            for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
+                if (board[row].every(cell => cell !== 0)) {
+                    board.splice(row, 1);
+                    board.unshift(Array(BOARD_WIDTH).fill(0));
+                    linesCleared++;
+                    row++; // Sprawdź tę samą linię ponownie
+                }
+            }
+            
+            if (linesCleared > 0) {
+                score += linesCleared * 100 * linesCleared; // Bonus za więcej linii naraz
+                scoreElement.textContent = score;
+                
+                // Zwiększ prędkość gry
+                dropInterval = Math.max(100, dropInterval - linesCleared * 10);
+            }
+        }
+
+        // Rysowanie
+        function draw() {
+            // Wyczyść canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Narysuj planszę
+            for (let row = 0; row < BOARD_HEIGHT; row++) {
+                for (let col = 0; col < BOARD_WIDTH; col++) {
+                    if (board[row][col] !== 0) {
+                        drawBlock(col, row, COLORS[board[row][col]]);
+                    }
+                }
+            }
+            
+            // Narysuj aktualny klocek
+            for (let row = 0; row < currentPiece.shape.length; row++) {
+                for (let col = 0; col < currentPiece.shape[row].length; col++) {
+                    if (currentPiece.shape[row][col] !== 0) {
+                        const x = currentPiece.x + col;
+                        const y = currentPiece.y + row;
+                        if (y >= 0) {
+                            drawBlock(x, y, COLORS[currentPiece.type]);
+                        }
+                    }
+                }
+            }
+            
+            // Narysuj siatkę
+            drawGrid();
+        }
+
+        // Rysowanie pojedynczego bloku
+        function drawBlock(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            
+            // Dodaj efekt 3D
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, 2);
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, 2, BLOCK_SIZE);
+            
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(x * BLOCK_SIZE, (y + 1) * BLOCK_SIZE - 2, BLOCK_SIZE, 2);
+            ctx.fillRect((x + 1) * BLOCK_SIZE - 2, y * BLOCK_SIZE, 2, BLOCK_SIZE);
+        }
+
+        // Rysowanie siatki
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x <= BOARD_WIDTH; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * BLOCK_SIZE, 0);
+                ctx.lineTo(x * BLOCK_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y <= BOARD_HEIGHT; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * BLOCK_SIZE);
+                ctx.lineTo(canvas.width, y * BLOCK_SIZE);
+                ctx.stroke();
+            }
+        }
+
+        // Główna pętla gry
+        function gameLoop(timestamp = 0) {
+            if (!gameRunning) return;
+            
+            if (timestamp - dropTime > dropInterval) {
+                moveDown();
+                dropTime = timestamp;
+            }
+            
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Obsługa klawiatury
+        document.addEventListener('keydown', (event) => {
+            if (!gameRunning) return;
+            
+            switch(event.code) {
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    moveLeft();
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    moveRight();
+                    break;
+                case 'ArrowDown':
+                    event.preventDefault();
+                    moveDown();
+                    break;
+                case 'Space':
+                    event.preventDefault();
+                    rotatePiece();
+                    break;
+                case 'KeyS':
+                    event.preventDefault();
+                    while(moveDown()) {} // Szybki spadek
+                    break;
+            }
+        });
+
+        // Uruchom grę
+        init();
+    </script>
+</body>
+</html>
