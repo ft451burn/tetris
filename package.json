@@ -1,0 +1,31 @@
+{
+  "name": "tetris-game",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@types/react": "^18.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ft451burn/tetris.git"
+  },
+  "keywords": ["tetris", "game", "react", "nextjs"],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ft451burn/tetris/issues"
+  },
+  "homepage": "https://github.com/ft451burn/tetris#readme",
+  "description": "A Tetris game implementation with proper L-piece collision detection"
+}
