@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            display: flex;
+            gap: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .game-board {
+            background: #000;
+            border: 3px solid #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            color: white;
+            min-width: 200px;
+        }
+        
+        .score-panel {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .score-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #4ecdc4;
+        }
+        
+        .score-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .controls h3 {
+            margin: 0 0 15px 0;
+            color: #4ecdc4;
+        }
+        
+        .control-item {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        
+        .next-piece {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            text-align: center;
+        }
+        
+        .next-piece h3 {
+            margin: 0 0 15px 0;
+            color: #4ecdc4;
+        }
+        
+        .next-canvas {
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+        }
+        
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .game-over-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        
+        .restart-btn {
+            background: #4ecdc4;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        
+        .restart-btn:hover {
+            background: #45b7aa;
+        }
+        
+        .test-panel {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .test-panel h3 {
+            margin: 0 0 15px 0;
+            color: #4ecdc4;
+        }
+        
+        .test-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 12px;
+        }
+        
+        .test-btn:hover {
+            background: #ff5252;
+        }
+        
+        .test-results {
+            margin-top: 10px;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="main-game">
+            <canvas id="gameCanvas" class="game-board" width="300" height="600"></canvas>
+        </div>
+        
+        <div class="sidebar">
+            <div class="score-panel">
+                <h3>Score</h3>
+                <div class="score-value" id="score">0</div>
+                <h3>Lines</h3>
+                <div class="score-value" id="lines">0</div>
+                <h3>Level</h3>
+                <div class="score-value" id="level">1</div>
+            </div>
+            
+            <div class="next-piece">
+                <h3>Next Piece</h3>
+                <canvas id="nextCanvas" class="next-canvas" width="120" height="120"></canvas>
+            </div>
+            
+            <div class="controls">
+                <h3>Controls</h3>
+                <div class="control-item">← → Move</div>
+                <div class="control-item">↓ Soft Drop</div>
+                <div class="control-item">↑ Rotate</div>
+                <div class="control-item">Space Hard Drop</div>
+                <div class="control-item">P Pause</div>
+            </div>
+            
+            <div class="test-panel">
+                <h3>Collision Tests</h3>
+                <button class="test-btn" onclick="runCollisionTests()">Run Tests</button>
+                <button class="test-btn" onclick="simulateRotations()">Rotation Sim</button>
+                <button class="test-btn" onclick="clearTestResults()">Clear</button>
+                <div class="test-results" id="testResults"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="game-over" id="gameOverScreen">
+        <div class="game-over-content">
+            <h2>Game Over</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button class="restart-btn" onclick="restartGame()">Play Again</button>
+        </div>
+    </div>
+    
+    <script src="tetris.js"></script>
+</body>
+</html>
